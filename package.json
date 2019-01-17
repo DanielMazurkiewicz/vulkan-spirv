@@ -1,0 +1,27 @@
+{
+  "name": "vulkan-spirv",
+  "version": "1.0.0",
+  "description": "A tool for creating spir-v code",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DanielMazurkiewicz/vulkan-spirv.git"
+  },
+  "keywords": [
+    "spir",
+    "spirv",
+    "spir-v",
+    "vulkan",
+    "khronos",
+    "gpu"
+  ],
+  "author": "Daniel Mazurkiewicz",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DanielMazurkiewicz/vulkan-spirv/issues"
+  },
+  "homepage": "https://github.com/DanielMazurkiewicz/vulkan-spirv#readme"
+}
