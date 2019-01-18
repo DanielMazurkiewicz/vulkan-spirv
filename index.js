@@ -1,66 +1,95 @@
-//const json = require('./external/SPIRV-Headers/include/spirv/1.2/spirv');
-//const jsonCore = require('./external/SPIRV-Headers/include/spirv/1.2/spirv.core.grammar');
-
-//jsonCore.instructions.forEach(i => console.log(i.opname));
 
 
-function SpirvConstructor({major, minor} = {major: 1, minor: 0}) {
-  const me = this;
-  const grammar = require(`./external/SPIRV-Headers/include/spirv/${major}.${minor}/spirv.core.grammar`);
-  const code = [];
+const cache = {};
+const getVersion = (major = 1, minor = 0) => {
+  const strVersion = `${major}.${minor}`
+  if (cache[strVersion]) return cache[strVersion];
 
-  const operandKinds = {}
+  const grammar = require(`./external/SPIRV-Headers/include/spirv/${strVersion}/spirv.core.grammar`);
 
-  grammar.operand_kinds.forEach(opKind => {
-    if (opKind.enumerants) {  
-      if (!operandKinds[opKind.category]) operandKinds[opKind.category] = {};
-      if (!operandKinds[opKind.category][opKind.kind]) operandKinds[opKind.category][opKind.kind] = {};
-      if (opKind.category === "BitEnum") {
-        // TODO: figure out bit enumerants
-      } else {
-        opKind.enumerants.forEach(enumerant => {
-          operandKinds[opKind.category][opKind.kind][enumerant.enumerant] = enumerant.value
-        });
-      }
+
+  const kinds = {}
+
+  grammar.operand_kinds.forEach(kind => {
+    if (kind.enumerants) {  // only kinds with enumerants
+      if (!kinds[kind.kind]) kinds[kind.kind] = {};
+
+      kind.enumerants.forEach(enumerant => {
+        kinds[kind.kind][enumerant.enumerant] = function(...args) {
+          let argCount = 0;
+          if (typeof enumerant.value === 'string') {
+            // some string hex value
+            throw new Error('TODO');
+          } else {
+            this.code.push(enumerant.value);
+          }
+
+          if (enumerant.parameters) {
+            enumerant.parameters.forEach(parameter => {
+              const arg = args[argCount++];
+              if (arg === undefined || arg === null) throw new Error(`Missing operand value (argument #${argCount}), list of allowed values:\n${Object.keys(kinds[enumerant.kind]).join('\n')}`);
+
+              if (kinds[enumerant.kind]) {
+                toExecute = kinds[enumerant.kind][arg];
+                if (!toExecute) throw new Error(`Unrecognized operand value - "${arg}" (argument #${argCount}). List of allowed values for ${kind.kind}.${enumerant.enumerant}:\n${Object.keys(kinds[enumerant.kind]).join('\n')}`);
+                argCount += toExecute.apply(this, args.slice(argCount));
+              } else if (typeof arg === 'number') {                
+                this.code.push(arg);
+              } else {
+                throw new Error(`Unexpected operand value type - "${arg}" (argument #${argCount}), expected ${parameter.kind}`);
+              }
+            });
+          }
+
+          return argCount;
+        }
+      });
     }
   });
 
-  console.log(operandKinds);
 
+  const methods = {}
 
   grammar.instructions.forEach(instruction => {
-    me[instruction.opname[2].toLowerCase() + instruction.opname.substring(3)] =
-           me[instruction.opname] = 
-
-      function() {
-
+    const methodName = instruction.opname[2].toLowerCase() + instruction.opname.substring(3);
+    methods[methodName] = methods[instruction.opname] = // keep oroginal name too
+      function(...args) {
+        let argCount = 0;
+        const instructionAddress = this.code.length;
+        this.code.push(0); //reservation for instruction
 
         if (instruction.operands) {
-          let error = '';
-          
-          for (let i = 0; i < instruction.operands.length; i++) {
-            if (arguments[i] === undefined || arguments[i] === null) {
-              error += `Missing operand ${i} of ${instruction.opname}\n`
-            }
-          }
+          instruction.operands.forEach(operand => {
+            const arg = args[argCount++];
+            if (arg === undefined || arg === null) throw new Error(`Missing operand value (argument #${argCount}) in instruction ${instruction.opname}`);
 
-          if (error) throw new Error(error);
+            if (kinds[operand.kind]) {
+              toExecute = kinds[operand.kind][arg];
+              if (!toExecute) throw new Error(`Unrecognized operand value - "${arg}" (argument #${argCount}) in instruction ${instruction.opname}.\nList of allowed values: \n${Object.keys(kinds[operand.kind]).join('\n')}`);
+              argCount += toExecute.apply(this, args.slice(argCount));
+            } else if (typeof arg === 'number') {                
+              this.code.push(arg);
+            } else {
+                throw new Error(`Unexpected operand value type - "${arg}" (argument #${argCount}) in instruction ${instruction.opname}, expected ${operand.kind}`);
+            }
+
+          });
         }
 
-        code.push(instruction.opcode);
-        return me;
-      }
+        this.code[instructionAddress] = instruction.opcode | (argCount + 1) << 16;
+        return this;        
+      }    
   })
 
-  this.getCode = () => code; // todo return U32 array
+  const ObjectConstructor = function() {
+    this.code = [];
+  }
+  ObjectConstructor.prototype = methods;
+
+  return ObjectConstructor;
 }
 
 
 
-const spirv = (new SpirvConstructor()).
-  nop().
-  undef(1, 1)
 
-console.log(spirv.getCode());
-
-module.exports = SpirvConstructor;
+module.exports = getVersion;
